@@ -1,0 +1,26 @@
+# Raw data (download from Kaggle, don't redistribute)
+data/*.csv
+data/*.zip
+
+# Power BI temp and cache
+*.pbix.bak
+.pbi/localSettings.json
+.pbi/cache.abf
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python environment
+.venv/
+.pytest_cache/
+
+# Generated model tables (rebuild with: python -m olist.pipeline all)
+# Figures and markdown reports ARE committed — they're what reviewers look at.
+outputs/model/*.csv
+logs/*.log

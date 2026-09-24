@@ -1,0 +1,184 @@
+// ============================================================================
+// Measures  (Day 4)
+// Create each one in the _Measures table: select _Measures > New measure > paste.
+// Put them in display folders (Model view > Properties > Display folder) using
+// the folder names in the section headers below.
+// Set the format string for each as listed in docs/04_kpi_dictionary.md.
+//
+// Why a "valid sale" filter? Cancelled and unavailable orders aren't real sales.
+// The flag is computed once in Power Query (IsValidSale / IsValidOrder), so every
+// measure uses the same rule.
+// ============================================================================
+
+
+// ---------------------------------------------------------------- 1. Sales
+Revenue =
+CALCULATE ( SUM ( Fact_Sales[price] ), Fact_Sales[IsValidSale] = 1 )
+
+Freight =
+CALCULATE ( SUM ( Fact_Sales[freight_value] ), Fact_Sales[IsValidSale] = 1 )
+
+Gross Order Value =
+[Revenue] + [Freight]
+
+Orders =
+CALCULATE ( DISTINCTCOUNT ( Fact_Sales[order_id] ), Fact_Sales[IsValidSale] = 1 )
+
+Items Sold =
+CALCULATE ( COUNTROWS ( Fact_Sales ), Fact_Sales[IsValidSale] = 1 )
+
+AOV =
+DIVIDE ( [Revenue], [Orders] )
+
+Items per Order =
+DIVIDE ( [Items Sold], [Orders] )
+
+// customer_id is per order, so real customers = distinct customer_unique_id.
+// FILTER over the fact table limits the dimension to customers with a valid sale.
+Customers =
+CALCULATE (
+    DISTINCTCOUNT ( Dim_Customer[customer_unique_id] ),
+    FILTER ( Fact_Sales, Fact_Sales[IsValidSale] = 1 )
+)
+
+Active Sellers =
+CALCULATE ( DISTINCTCOUNT ( Fact_Sales[seller_id] ), Fact_Sales[IsValidSale] = 1 )
+
+
+// ---------------------------------------------------------- 2. Time intelligence
+// These only work correctly once Dim_Date is marked as a date table.
+Revenue PY =
+CALCULATE ( [Revenue], SAMEPERIODLASTYEAR ( Dim_Date[Date] ) )
+
+Revenue YoY =
+IF ( NOT ISBLANK ( [Revenue PY] ), [Revenue] - [Revenue PY] )
+
+Revenue YoY % =
+DIVIDE ( [Revenue YoY], [Revenue PY] )
+
+Revenue MTD =
+TOTALMTD ( [Revenue], Dim_Date[Date] )
+
+Revenue YTD =
+TOTALYTD ( [Revenue], Dim_Date[Date] )
+
+Revenue Rolling 3M =
+CALCULATE (
+    [Revenue],
+    DATESINPERIOD ( Dim_Date[Date], MAX ( Dim_Date[Date] ), -3, MONTH )
+)
+
+Revenue 3M Monthly Avg =
+DIVIDE ( [Revenue Rolling 3M], 3 )
+
+Orders PY =
+CALCULATE ( [Orders], SAMEPERIODLASTYEAR ( Dim_Date[Date] ) )
+
+Orders YoY % =
+DIVIDE ( [Orders] - [Orders PY], [Orders PY] )
+
+
+// ------------------------------------------------------------ 3. Product ranking
+// ALLSELECTED respects slicers (e.g. a region filter) but ignores the row's own category,
+// so ranks are "within what the user has selected".
+Category Rank =
+IF (
+    HASONEVALUE ( Dim_Product[Category] ),
+    RANKX ( ALLSELECTED ( Dim_Product[Category] ), [Revenue], , DESC, DENSE )
+)
+
+// Bottom ranking: only categories that actually sold, otherwise blanks rank first.
+Category Rank Ascending =
+IF (
+    HASONEVALUE ( Dim_Product[Category] ) && [Revenue] > 0,
+    RANKX (
+        FILTER ( ALLSELECTED ( Dim_Product[Category] ), [Revenue] > 0 ),
+        [Revenue], , ASC, DENSE
+    )
+)
+
+// Use as a visual-level filter: "Is Top 10 is 1"
+Is Top 10 Category =
+IF ( [Category Rank] <= 10, 1, 0 )
+
+Is Bottom 10 Category =
+IF ( NOT ISBLANK ( [Category Rank Ascending] ) && [Category Rank Ascending] <= 10, 1, 0 )
+
+Revenue Share % =
+DIVIDE ( [Revenue], CALCULATE ( [Revenue], ALLSELECTED ( Dim_Product[Category] ) ) )
+
+// Pareto: running share of revenue from the biggest category down to this one.
+Cumulative Share % =
+VAR CurrentRevenue = [Revenue]
+VAR AllCategories = ALLSELECTED ( Dim_Product[Category] )
+VAR RunningTotal =
+    SUMX ( FILTER ( AllCategories, [Revenue] >= CurrentRevenue ), [Revenue] )
+RETURN
+    IF ( NOT ISBLANK ( CurrentRevenue ),
+        DIVIDE ( RunningTotal, CALCULATE ( [Revenue], AllCategories ) ) )
+
+// Item-level average review, so it can be sliced by category.
+Avg Review by Item =
+CALCULATE ( AVERAGE ( Fact_Sales[ReviewScore] ), Fact_Sales[IsValidSale] = 1 )
+
+
+// ------------------------------------------------------------------ 4. Delivery
+Delivered Orders =
+CALCULATE ( COUNTROWS ( Fact_Orders ), Fact_Orders[IsDelivered] = 1 )
+
+Late Orders =
+CALCULATE ( COUNTROWS ( Fact_Orders ), Fact_Orders[IsLate] = 1 )
+
+Late Delivery % =
+DIVIDE ( [Late Orders], [Delivered Orders] )
+
+On-Time Delivery % =
+IF ( NOT ISBLANK ( [Delivered Orders] ), 1 - [Late Delivery %] )
+
+Avg Delivery Days =
+CALCULATE ( AVERAGE ( Fact_Orders[DeliveryDays] ), Fact_Orders[IsDelivered] = 1 )
+
+Avg Days vs Estimate =
+CALCULATE ( AVERAGE ( Fact_Orders[DaysVsEstimate] ), Fact_Orders[IsDelivered] = 1 )
+
+
+// ------------------------------------------------------------ 5. Customer experience
+Reviewed Orders =
+CALCULATE ( COUNTROWS ( Fact_Orders ), NOT ISBLANK ( Fact_Orders[ReviewScore] ) )
+
+Avg Review Score =
+AVERAGE ( Fact_Orders[ReviewScore] )
+
+% 5-Star =
+DIVIDE ( CALCULATE ( COUNTROWS ( Fact_Orders ), Fact_Orders[ReviewScore] = 5 ), [Reviewed Orders] )
+
+% Detractors =
+DIVIDE ( CALCULATE ( COUNTROWS ( Fact_Orders ), Fact_Orders[ReviewScore] <= 2 ), [Reviewed Orders] )
+
+Avg Review (Late) =
+CALCULATE ( [Avg Review Score], Fact_Orders[IsLate] = 1 )
+
+Avg Review (On Time) =
+CALCULATE ( [Avg Review Score], Fact_Orders[IsDelivered] = 1, Fact_Orders[IsLate] = 0 )
+
+Review Gap (On Time − Late) =
+[Avg Review (On Time)] - [Avg Review (Late)]
+
+
+// ---------------------------------------------------------------- 6. Payments
+Payment Value =
+CALCULATE ( SUM ( Fact_Orders[PaymentValue] ), Fact_Orders[IsValidOrder] = 1 )
+
+Avg Instalments =
+CALCULATE ( AVERAGE ( Fact_Orders[MaxInstallments] ), Fact_Orders[IsValidOrder] = 1 )
+
+
+// ------------------------------------------------------ 7. Titles and labels (optional)
+// Dynamic titles make a report feel professional. Use via visual title > fx.
+Selected Period Label =
+VAR MinD = MIN ( Dim_Date[Date] )
+VAR MaxD = MAX ( Dim_Date[Date] )
+RETURN FORMAT ( MinD, "mmm yyyy" ) & " – " & FORMAT ( MaxD, "mmm yyyy" )
+
+Revenue Trend Title =
+"Revenue trend, " & [Selected Period Label]

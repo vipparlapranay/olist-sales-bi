@@ -1,0 +1,17 @@
+[project]
+name = "olist-sales-bi"
+version = "1.0.0"
+description = "Olist e-commerce analytics: data quality, star schema, segmentation and late-delivery prediction"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

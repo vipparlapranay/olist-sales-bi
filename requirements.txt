@@ -1,0 +1,15 @@
+# Core data work
+pandas>=2.0
+numpy>=1.24
+
+# Statistics (Mann-Whitney U, t-test, confidence intervals)
+scipy>=1.10
+
+# Machine learning (late-delivery risk model, K-Means cross-check)
+scikit-learn>=1.3
+
+# Charts for the README
+matplotlib>=3.7
+
+# Tests
+pytest>=7.4

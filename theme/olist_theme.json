@@ -1,0 +1,19 @@
+{
+  "name": "Olist Sales",
+  "dataColors": ["#2F6FB2", "#E07A2E", "#2E8C6E", "#8A4FB0", "#C9A227", "#5C7080", "#B8465A", "#4BA3C7"],
+  "background": "#FFFFFF",
+  "foreground": "#1F2A30",
+  "tableAccent": "#2F6FB2",
+  "good": "#2E8C6E",
+  "neutral": "#C9A227",
+  "bad": "#B8465A",
+  "maximum": "#2F6FB2",
+  "center": "#C9A227",
+  "minimum": "#E8EEF4",
+  "textClasses": {
+    "callout": { "fontFace": "Segoe UI Semibold", "fontSize": 26, "color": "#1F2A30" },
+    "title": { "fontFace": "Segoe UI Semibold", "fontSize": 12, "color": "#1F2A30" },
+    "header": { "fontFace": "Segoe UI Semibold", "fontSize": 11, "color": "#1F2A30" },
+    "label": { "fontFace": "Segoe UI", "fontSize": 10, "color": "#5C7080" }
+  }
+}
