@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive analytics over 99,441 Olist marketplace orders: sales trend, ABC category concentration, the delivery-satisfaction gap, RFM customer segments and a late-delivery risk model.">
+<meta name="author" content="Pranay V R">
+<meta property="og:title" content="Olist Marketplace Analytics">
+<meta property="og:description" content="Single-page interactive dashboard over 99,441 e-commerce orders, built from a tested Python pipeline.">
+<meta property="og:type" content="website">
+<style>
+  :root { color-scheme: light; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Olist Marketplace Analytics</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+</head>
+<body>
+<style>
+/* Layout: analyst console — sticky header + KPI rail, tab bar, flexible canvas, commentary footer. */
+:root{
+  --paper:#f4f6f5;      /* slate-biased off-white, not cream */
+  --surface:#ffffff;
+  --surface-2:#eceff0;
+  --ink:#11191c;        /* deep slate, deliberately not pure black */
+  --ink-2:#4b585d;
+  --ink-3:#7d8a8e;
+  --rule:#d9e0e0;
+  --rule-strong:#b9c4c5;
+  --s1:#2a78d6;         /* categorical slot 1 — validated */
+  --s2:#eb6834;         /* slot 2 */
+  --s3:#1baf7a;         /* slot 3 */
+  --good:#0ca30c;
+  --critical:#d03b3b;
+  --warning:#fab219;
+  --focus:#2a78d6;
+  --font-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-data:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e1416; --surface:#161e21; --surface-2:#1e282b;
+    --ink:#eef3f3; --ink-2:#a8b6b9; --ink-3:#738184;
+    --rule:#283538; --rule-strong:#3b4a4e;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#0ca30c; --critical:#d03b3b; --warning:#fab219;
+    --focus:#5fa3ef;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e1416; --surface:#161e21; --surface-2:#1e282b;
+  --ink:#eef3f3; --ink-2:#a8b6b9; --ink-3:#738184;
+  --rule:#283538; --rule-strong:#3b4a4e;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#0ca30c; --critical:#d03b3b; --warning:#fab219;
+  --focus:#5fa3ef;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--font-display); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1320px; margin:0 auto; padding-inline:16px; padding-block:16px 28px}
+
+/* ---------- header ---------- */
+.masthead{
+  display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between;
+  gap:8px 24px; padding-bottom:12px; border-bottom:2px solid var(--ink);
+}
+.masthead h1{
+  font-size:clamp(17px,2.4vw,22px); font-weight:700; letter-spacing:-0.015em;
+  margin:0; text-wrap:balance;
+}
+.masthead .sub{
+  font-family:var(--font-data); font-size:11.5px; color:var(--ink-2);
+  font-variant-numeric:tabular-nums; letter-spacing:0.01em;
+}
+.masthead .sub b{color:var(--ink); font-weight:500}
+
+/* ---------- KPI rail ---------- */
+.kpis{
+  display:grid; grid-template-columns:repeat(6,minmax(0,1fr));
+  border:1px solid var(--rule); border-top:none; background:var(--surface);
+}
+.kpi{padding:11px 12px; border-left:1px solid var(--rule); min-width:0}
+.kpi:first-child{border-left:none}
+.kpi .lab{
+  font-size:10px; text-transform:uppercase; letter-spacing:0.07em;
+  color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.kpi .val{
+  font-family:var(--font-data); font-weight:600; font-size:clamp(14px,1.7vw,20px);
+  font-variant-numeric:tabular-nums; letter-spacing:-0.02em; margin-top:3px; color:var(--ink);
+}
+.kpi .note{font-family:var(--font-data); font-size:10.5px; color:var(--ink-3); margin-top:1px}
+.kpi .note.up{color:var(--good)} .kpi .note.down{color:var(--critical)}
+@media (max-width:860px){ .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi:nth-child(4){border-left:none} .kpi:nth-child(n+4){border-top:1px solid var(--rule)} }
+@media (max-width:460px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi:nth-child(odd){border-left:none} .kpi:nth-child(n+3){border-top:1px solid var(--rule)} }
+
+/* ---------- tabs ---------- */
+.tabs{display:flex; gap:2px; margin-top:14px; flex-wrap:wrap}
+.tab{
+  font-family:var(--font-display); font-size:12.5px; font-weight:500;
+  padding:7px 14px; border:1px solid var(--rule); background:var(--surface-2);
+  color:var(--ink-2); cursor:pointer; border-radius:2px 2px 0 0; margin-bottom:-1px;
+}
+.tab:hover{color:var(--ink); background:var(--surface)}
+.tab[aria-selected="true"]{
+  background:var(--surface); color:var(--ink); font-weight:600;
+  border-bottom-color:var(--surface); box-shadow:inset 0 2px 0 var(--s1);
+}
+.tab:focus-visible{outline:2px solid var(--focus); outline-offset:1px; z-index:1}
+
+/* ---------- canvas ---------- */
+.canvas{
+  border:1px solid var(--rule); background:var(--surface); padding:16px;
+  display:grid; gap:16px;
+}
+.grid-2{display:grid; grid-template-columns:1.35fr 1fr; gap:16px}
+.grid-2b{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+@media (max-width:820px){ .grid-2,.grid-2b{grid-template-columns:1fr} }
+
+.panel{min-width:0; display:flex; flex-direction:column; gap:9px}
+.panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap}
+.panel-title{font-size:13.5px; font-weight:600; letter-spacing:-0.01em; margin:0; text-wrap:balance}
+.panel-sub{font-size:11.5px; color:var(--ink-3); margin:2px 0 0; font-weight:400}
+
+/* ---------- controls ---------- */
+.seg{display:inline-flex; border:1px solid var(--rule-strong); border-radius:3px; overflow:hidden; flex-wrap:wrap}
+.seg button{
+  font-family:var(--font-display); font-size:11.5px; font-weight:500;
+  padding:4px 10px; border:none; border-left:1px solid var(--rule);
+  background:var(--surface); color:var(--ink-2); cursor:pointer; white-space:nowrap;
+}
+.seg button:first-child{border-left:none}
+.seg button:hover{background:var(--surface-2); color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--paper); font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--focus); outline-offset:-2px}
+.ctl-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.ctl-lab{font-size:10px; text-transform:uppercase; letter-spacing:0.07em; color:var(--ink-3)}
+
+/* ---------- chart shell ---------- */
+.chart{position:relative; width:100%; min-width:0}
+.chart svg{display:block; width:100%; height:auto; overflow:visible}
+.tip{
+  position:absolute; pointer-events:none; opacity:0; transition:opacity .09s;
+  background:var(--ink); color:var(--paper); font-family:var(--font-data); font-size:11px;
+  padding:5px 8px; border-radius:3px; white-space:nowrap; z-index:5;
+  font-variant-numeric:tabular-nums; transform:translate(-50%,-100%); box-shadow:0 2px 8px rgba(0,0,0,.22);
+}
+.tip.on{opacity:1}
+.tip b{font-weight:600; display:block}
+
+/* ---------- table view ---------- */
+.tbl-wrap{overflow-x:auto}
+table.dv{border-collapse:collapse; width:100%; font-family:var(--font-data); font-size:11.5px;
+  font-variant-numeric:tabular-nums}
+table.dv th,table.dv td{text-align:right; padding:4px 8px; border-bottom:1px solid var(--rule); white-space:nowrap}
+table.dv th:first-child,table.dv td:first-child{text-align:left; font-family:var(--font-display)}
+table.dv th{color:var(--ink-3); font-weight:500; font-size:10px; text-transform:uppercase; letter-spacing:0.05em}
+
+/* ---------- stat blocks ---------- */
+.stat-pair{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.stat{border:1px solid var(--rule); padding:13px 14px; background:var(--surface)}
+.stat .k{font-size:10px; text-transform:uppercase; letter-spacing:0.07em; color:var(--ink-3)}
+.stat .v{font-family:var(--font-data); font-size:clamp(26px,5vw,40px); font-weight:600;
+  letter-spacing:-0.03em; line-height:1.05; margin-top:5px; font-variant-numeric:tabular-nums}
+.stat .d{font-size:11.5px; color:var(--ink-2); margin-top:4px}
+.stat.ontime{border-left:3px solid var(--s1)}
+.stat.late{border-left:3px solid var(--s2)}
+
+.testbox{border:1px solid var(--rule); background:var(--surface-2); padding:12px 14px}
+.testbox dl{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0;
+  font-family:var(--font-data); font-size:11.5px; font-variant-numeric:tabular-nums}
+.testbox dt{color:var(--ink-3)} .testbox dd{margin:0; color:var(--ink); text-align:right}
+.testbox .cap{font-family:var(--font-display); font-size:11.5px; color:var(--ink-2);
+  margin:9px 0 0; line-height:1.5; max-width:62ch}
+
+/* confusion matrix */
+table.cm{border-collapse:collapse; font-family:var(--font-data); font-size:12px;
+  font-variant-numeric:tabular-nums; width:100%}
+table.cm td,table.cm th{border:1px solid var(--rule); padding:9px 10px; text-align:right}
+table.cm th{color:var(--ink-3); font-weight:500; font-size:10px; text-transform:uppercase;
+  letter-spacing:0.05em; text-align:center; font-family:var(--font-display)}
+table.cm th[scope="row"]{text-align:left}
+table.cm td.hit{background:color-mix(in srgb,var(--s3) 15%,transparent); font-weight:600}
+table.cm td.miss{background:color-mix(in srgb,var(--s2) 13%,transparent)}
+
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--ink-2)}
+.legend span{display:inline-flex; align-items:center; gap:5px}
+.legend i{width:9px; height:9px; border-radius:2px; display:block}
+
+.callout{border-left:3px solid var(--s2); padding:10px 0 10px 13px; max-width:64ch}
+.callout b{font-family:var(--font-data); font-size:15px}
+.callout p{margin:3px 0 0; font-size:12.5px; color:var(--ink-2); line-height:1.5}
+
+/* ---------- commentary ---------- */
+.commentary{
+  border:1px solid var(--rule); border-top:none; background:var(--surface-2);
+  padding:11px 14px; font-size:12.5px; color:var(--ink-2); line-height:1.5;
+}
+.commentary b{color:var(--ink); font-family:var(--font-data); font-weight:600;
+  font-variant-numeric:tabular-nums}
+.colophon{margin-top:14px; font-size:11px; color:var(--ink-3); line-height:1.6; max-width:78ch}
+.colophon a{color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <h1>Olist Marketplace Analytics</h1>
+    <div class="sub"><b>99,441</b> orders · <b>74</b> categories · <b>94,983</b> customers · Jan 2017 – Aug 2018</div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Analysis views"></nav>
+
+  <main class="canvas" id="canvas" role="tabpanel"></main>
+
+  <div class="commentary" id="commentary"></div>
+
+  <p class="colophon">
+    Source: Olist Brazilian E-Commerce Public Dataset (CC BY-NC 4.0), 99,441 orders placed
+    2016–2018. Figures produced by a Python pipeline — 22 data-quality checks, a two-fact
+    star schema, ABC and RFM segmentation, a Mann–Whitney test and a late-delivery
+    classifier — and reconciled line by line against the Power BI model. Revenue excludes
+    cancelled and unavailable orders and is stated in Brazilian reais, not inflation-adjusted.
+  </p>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ============================================================
+   DATA — every figure below comes from the pipeline's own
+   reports (reconciliation.md, analysis_report.md, ml_report.md).
+   The one exception is REGIONS, read off the Power BI bar chart;
+   replace with exact values from the gold layer when convenient.
+   ============================================================ */
+
+const KPI = {
+  revenue: 13494400.74, freight: 2241126.29, gross: 15735527.03,
+  orders: 98199, items: 112101, aov: 137.42, itemsPerOrder: 1.14,
+  customers: 94983, sellers: 3053,
+  delivered: 96470, lateOrders: 6534, latePct: 0.068,
+  avgDeliveryDays: 12.1, avgVsEstimate: -11.9,
+  reviewed: 99441, avgReview: 4.07, fiveStar: 0.574, detractors: 0.151,
+  reviewLate: 2.26, reviewOnTime: 4.28, reviewGap: 2.02,
+  rev2017: 6108492.27, rev2018: 7341182.41
+};
+
+const MONTHLY = [
+  ["2017-01",120098.27,787],["2017-02",244959.35,1718],["2017-03",368341.32,2617],
+  ["2017-04",353842.98,2377],["2017-05",503159.19,3640],["2017-06",429916.61,3205],
+  ["2017-07",492287.30,3946],["2017-08",568245.79,4272],["2017-09",621415.91,4227],
+  ["2017-10",660179.62,4547],["2017-11",1003862.14,7421],["2017-12",742183.79,5618],
+  ["2018-01",945456.29,7187],["2018-02",837895.43,6624],["2018-03",981051.06,7168],
+  ["2018-04",993592.98,6919],["2018-05",992871.75,6833],["2018-06",863265.53,6145],
+  ["2018-07",878044.27,6233],["2018-08",848860.10,6421]
+].map(([m,rev,ord]) => ({m, rev, ord, aov: rev/ord}));
+
+const CATEGORIES = [
+  ["Health Beauty",1255695.13,"A",4.13],["Watches Gifts",1198185.21,"A",4.01],
+  ["Bed Bath Table",1035964.06,"A",3.88],["Sports Leisure",979740.92,"A",4.11],
+  ["Computers Accessories",904322.00,"A",3.94],["Furniture Decor",727465.05,"A",3.90],
+  ["Housewares",626825.80,"A",4.06],["Cool Stuff",620770.49,"A",4.14],
+  ["Auto",586585.73,"A",4.05],["Garden Tools",481009.94,"A",4.04],
+  ["Toys",479808.54,"A",4.16],["Baby",410312.20,"A",4.01],
+  ["Perfumery",396599.31,"A",4.17],["Telephony",322342.64,"A",3.94],
+  ["Office Furniture",273580.70,"A",3.48],["Stationery",229593.84,"A",4.19],
+  ["Computers",222963.13,"A",4.14],["Pet Shop",213766.63,"B",4.18],
+  ["Small Appliances",187907.26,"B",4.16],["Musical Instruments",187788.44,"B",4.17],
+  ["Unknown",178572.55,"B",3.84],["Electronics",157079.54,"B",4.03],
+  ["Consoles Games",154927.27,"B",4.03],["Fashion Bags Accessories",151622.75,"B",4.14],
+  ["Construction Tools Construction",144550.19,"B",4.05],["Luggage Accessories",140111.38,"B",4.32],
+  ["Home Appliances 2",110649.74,"B",4.16],["Home Construction",83010.12,"B",3.93],
+  ["Home Appliances",80001.24,"B",4.16],["Agro Industry And Commerce",72530.47,"B",4.00],
+  ["Furniture Living Room",68638.56,"B",3.89],["Home Confort",58572.04,"B",3.83],
+  ["Fixed Telephony",57824.21,"B",3.70],["Air Conditioning",54723.16,"C",3.94],
+  ["Audio",50668.60,"C",3.82],["Small Appliances Home Oven And Coffee",47445.71,"C",4.30],
+  ["Kitchen Dining Laundry Garden Furniture",46070.37,"C",3.97],
+  ["Books General Interest",45622.29,"C",4.48]
+].map(([name,rev,abc,review]) => ({name, rev, abc, review}));
+
+const CAT_SHOWN = CATEGORIES.reduce((a,c) => a + c.rev, 0);
+const CAT_OTHER = { name:"Other (36 categories)", rev: KPI.revenue - CAT_SHOWN, abc:"C", review:null };
+
+const ABC = [
+  {cls:"A", n:17, rev:10751764.69, note:"protect"},
+  {cls:"B", n:16, rev:2047552.39, note:"grow"},
+  {cls:"C", n:41, rev:695083.66,  note:"review"}
+];
+
+/* Read from the Power BI regional chart — swap for exact gold-layer values. */
+const REGIONS = [
+  {name:"Southeast", rev:8_930_000}, {name:"South", rev:1_780_000},
+  {name:"Northeast", rev:1_320_000}, {name:"Center-West", rev:1_020_000},
+  {name:"North", rev:444_000}
+];
+
+const SEGMENTS = [
+  {name:"Hibernating", n:23245, value:1302134, avg:56},
+  {name:"Big Spenders", n:16673, value:4366983, avg:262},
+  {name:"Champions", n:15137, value:2290720, avg:151},
+  {name:"At Risk (high value)", n:14748, value:4129148, avg:280},
+  {name:"Recent Customers", n:13740, value:767711, avg:56},
+  {name:"Needs Attention", n:11440, value:637705, avg:56}
+];
+
+const MODEL = {
+  train:77176, test:19294, splitDate:"2018-05-26", lateRate:0.068,
+  models:[
+    {name:"Logistic Regression", roc:0.660, pr:0.059, chosen:true},
+    {name:"Random Forest", roc:0.644, pr:0.055, chosen:false}
+  ],
+  baseline:0.035,
+  cm:{tn:10141, fp:8479, fn:193, tp:481},
+  precision:0.054, recall:0.714,
+  drivers:[
+    ["Audio category",0.7922],["Luggage Accessories",0.7121],["Same state as seller",0.6489],
+    ["Promised delivery days",0.5834],["Food Drink category",0.5659],["Market Place category",0.5457],
+    ["Customer in Northeast",0.5140],["Customer in North",0.5071],["Home Confort category",0.4869],
+    ["Customer in Center-West",0.4838]
+  ]
+};
+
+/* ============================ formatting ============================ */
+const nf = (n,d=0) => n.toLocaleString("en-AU",{minimumFractionDigits:d,maximumFractionDigits:d});
+const brl = n => {
+  if (Math.abs(n) >= 1e6) return "R$" + nf(n/1e6,2) + "M";
+  if (Math.abs(n) >= 1e3) return "R$" + nf(n/1e3,0) + "K";
+  return "R$" + nf(n,0);
+};
+const brlFull = n => "R$" + nf(n,2);
+const pct = (n,d=1) => nf(n*100,d) + "%";
+const monthLabel = m => {
+  const [y,mm] = m.split("-");
+  return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+mm-1] + " '" + y.slice(2);
+};
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ============================ svg helpers ============================ */
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, text) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  return n;
+}
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  const r = v / mag;
+  for (const s of [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (r <= s) return s * mag;
+  return 10 * mag;
+}
+
+/* Like-for-like growth: the dataset stops in August, so comparing calendar 2018
+   against full-year 2017 would understate it badly. Compare the same months. */
+function yoyLikeForLike() {
+  const sum = y => MONTHLY.filter(d => d.m.startsWith(y) && +d.m.slice(5) <= 8)
+    .reduce((a, d) => a + d.rev, 0);
+  const a = sum("2017"), b = sum("2018");
+  return { a, b, growth: (b - a) / a };
+}
+
+/* tooltip plumbing shared by every chart */
+function tipFor(host) {
+  let t = host.querySelector(".tip");
+  if (!t) { t = document.createElement("div"); t.className = "tip"; host.appendChild(t); }
+  return t;
+}
+function showTip(host, x, y, html) {
+  const t = tipFor(host);
+  t.innerHTML = html;
+  t.style.left = Math.max(4, Math.min(host.clientWidth - 4, x)) + "px";
+  t.style.top = (y - 8) + "px";
+  t.classList.add("on");
+}
+const hideTip = host => { const t = host.querySelector(".tip"); if (t) t.classList.remove("on"); };
+
+/* ============================ charts ============================ */
+
+/* Horizontal bars. Direct value labels on every bar — this is also the
+   relief required where a slot sits below 3:1 on the light surface. */
+function hBars(host, rows, opts = {}) {
+  const { fmt = brl, color = "var(--s1)", colorOf = null, maxLabel = 30 } = opts;
+  host.innerHTML = "";
+  const W = host.clientWidth || 520;
+  const rowH = opts.rowH || 23, gap = 2;
+  const labelW = Math.min(Math.max(96, W * 0.3), 190);
+  const valueW = 74;
+  const plotW = Math.max(40, W - labelW - valueW - 8);
+  const H = rows.length * rowH;
+  const max = Math.max(...rows.map(r => r.v), 1);
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": opts.aria || "Bar chart" });
+
+  rows.forEach((r, i) => {
+    const y = i * rowH;
+    const bw = Math.max(2, (r.v / max) * plotW);
+    const fill = colorOf ? colorOf(r) : color;
+
+    const hit = el("rect", { x: 0, y, width: W, height: rowH, fill: "transparent" });
+    hit.style.cursor = "default";
+    svg.appendChild(hit);
+
+    const label = el("text", {
+      x: 0, y: y + rowH / 2 + 4, "font-size": 11.5, fill: "var(--ink-2)",
+      "font-family": "var(--font-display)"
+    }, r.k.length > maxLabel ? r.k.slice(0, maxLabel - 1) + "…" : r.k);
+    svg.appendChild(label);
+
+    svg.appendChild(el("rect", {
+      x: labelW, y: y + gap, width: bw, height: rowH - gap * 2,
+      fill, rx: 3, ry: 3
+    }));
+
+    svg.appendChild(el("text", {
+      x: labelW + bw + 7, y: y + rowH / 2 + 4, "font-size": 11,
+      fill: "var(--ink-2)", "font-family": "var(--font-data)",
+      "font-variant-numeric": "tabular-nums"
+    }, fmt(r.v)));
+
+    hit.addEventListener("pointerenter", e => {
+      const b = host.getBoundingClientRect();
+      showTip(host, e.clientX - b.left, y * (host.clientHeight / H) + 14,
+        `<b>${r.k}</b>${r.tip || fmt(r.v)}`);
+    });
+    hit.addEventListener("pointerleave", () => hideTip(host));
+  });
+
+  host.appendChild(svg);
+}
+
+/* Vertical columns with rounded tops and labels above. */
+function vBars(host, rows, opts = {}) {
+  const { fmt = brl, colorOf = null, color = "var(--s1)" } = opts;
+  host.innerHTML = "";
+  const W = host.clientWidth || 360, H = opts.height || 190;
+  const padB = 34, padT = 26;
+  const max = niceMax(Math.max(...rows.map(r => r.v), 1));
+  const n = rows.length;
+  const slot = W / n, bw = Math.min(slot - 14, 66);
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": opts.aria || "Column chart" });
+
+  svg.appendChild(el("line", { x1: 0, y1: H - padB, x2: W, y2: H - padB,
+    stroke: "var(--rule-strong)", "stroke-width": 1 }));
+
+  rows.forEach((r, i) => {
+    const cx = slot * i + slot / 2;
+    const h = Math.max(2, (r.v / max) * (H - padB - padT));
+    const y = H - padB - h;
+    svg.appendChild(el("rect", {
+      x: cx - bw / 2, y, width: bw, height: h,
+      fill: colorOf ? colorOf(r) : color, rx: 3, ry: 3
+    }));
+    svg.appendChild(el("text", { x: cx, y: y - 7, "font-size": 11.5, "text-anchor": "middle",
+      fill: "var(--ink)", "font-family": "var(--font-data)", "font-weight": 600,
+      "font-variant-numeric": "tabular-nums" }, fmt(r.v)));
+    svg.appendChild(el("text", { x: cx, y: H - padB + 15, "font-size": 11.5, "text-anchor": "middle",
+      fill: "var(--ink-2)", "font-family": "var(--font-display)" }, r.k));
+    if (r.sub) svg.appendChild(el("text", { x: cx, y: H - padB + 28, "font-size": 10,
+      "text-anchor": "middle", fill: "var(--ink-3)", "font-family": "var(--font-display)" }, r.sub));
+  });
+
+  host.appendChild(svg);
+}
+
+/* Line with area fill, faint grid, emphasized endpoint, crosshair tooltip. */
+function lineChart(host, pts, opts = {}) {
+  const { fmt = brl, color = "var(--s1)", label = "" } = opts;
+  host.innerHTML = "";
+  const W = host.clientWidth || 640, H = opts.height || 236;
+  const padL = 54, padR = 12, padT = 12, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const max = niceMax(Math.max(...pts.map(p => p.v)));
+  const x = i => padL + (pts.length === 1 ? plotW / 2 : (i / (pts.length - 1)) * plotW);
+  const y = v => padT + plotH - (v / max) * plotH;
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": opts.aria || "Line chart" });
+
+  for (let g = 0; g <= 4; g++) {
+    const gv = (max / 4) * g, gy = y(gv);
+    svg.appendChild(el("line", { x1: padL, y1: gy, x2: W - padR, y2: gy,
+      stroke: "var(--rule)", "stroke-width": 1 }));
+    svg.appendChild(el("text", { x: padL - 8, y: gy + 4, "font-size": 10.5, "text-anchor": "end",
+      fill: "var(--ink-3)", "font-family": "var(--font-data)",
+      "font-variant-numeric": "tabular-nums" }, fmt(gv)));
+  }
+
+  const area = pts.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.v)}`).join(" ")
+    + ` L${x(pts.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
+  svg.appendChild(el("path", { d: area, fill: color, "fill-opacity": 0.1, stroke: "none" }));
+  svg.appendChild(el("path", {
+    d: pts.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.v)}`).join(" "),
+    fill: "none", stroke: color, "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round"
+  }));
+
+  const last = pts.length - 1;
+  svg.appendChild(el("circle", { cx: x(last), cy: y(pts[last].v), r: 4.5, fill: color,
+    stroke: "var(--surface)", "stroke-width": 2 }));
+
+  const step = pts.length > 14 ? 3 : pts.length > 7 ? 2 : 1;
+  pts.forEach((p, i) => {
+    /* Label every nth point plus the last, but drop a stepped label that would
+       collide with the final one. */
+    const stepped = i % step === 0;
+    const crowded = stepped && i !== last && last - i < step;
+    if ((stepped && !crowded) || i === last) {
+      svg.appendChild(el("text", { x: x(i), y: H - 9, "font-size": 10, "text-anchor": "middle",
+        fill: "var(--ink-3)", "font-family": "var(--font-data)" }, p.k));
+    }
+  });
+
+  const cross = el("line", { x1: 0, y1: padT, x2: 0, y2: padT + plotH,
+    stroke: "var(--ink-3)", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
+  const dot = el("circle", { r: 4.5, fill: color, stroke: "var(--surface)",
+    "stroke-width": 2, opacity: 0 });
+  svg.appendChild(cross); svg.appendChild(dot);
+
+  const hit = el("rect", { x: padL, y: padT, width: plotW, height: plotH, fill: "transparent" });
+  svg.appendChild(hit);
+  hit.addEventListener("pointermove", e => {
+    const b = host.getBoundingClientRect();
+    const scale = W / b.width;
+    const px = (e.clientX - b.left) * scale;
+    let i = Math.round(((px - padL) / plotW) * (pts.length - 1));
+    i = Math.max(0, Math.min(pts.length - 1, i));
+    const p = pts[i];
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i));
+    cross.setAttribute("opacity", 1);
+    dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(p.v)); dot.setAttribute("opacity", 1);
+    showTip(host, x(i) / scale, (y(p.v) / scale), `<b>${p.full || p.k}</b>${label}${fmt(p.v)}`);
+  });
+  hit.addEventListener("pointerleave", () => {
+    cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); hideTip(host);
+  });
+
+  host.appendChild(svg);
+}
+
+/* Scatter — revenue against satisfaction, three validated hues by ABC class. */
+function scatter(host, rows, opts = {}) {
+  host.innerHTML = "";
+  const W = host.clientWidth || 560, H = opts.height || 280;
+  const padL = 40, padR = 16, padT = 14, padB = 40;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const maxX = niceMax(Math.max(...rows.map(r => r.x)));
+  const yMin = 3.3, yMax = 4.6;
+  const X = v => padL + (v / maxX) * plotW;
+  const Y = v => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+  const hue = { A: "var(--s1)", B: "var(--s2)", C: "var(--s3)" };
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": "Scatter plot of category revenue against average review score" });
+
+  for (let v = 3.4; v <= 4.6001; v += 0.3) {
+    const gy = Y(v);
+    svg.appendChild(el("line", { x1: padL, y1: gy, x2: W - padR, y2: gy,
+      stroke: "var(--rule)", "stroke-width": 1 }));
+    svg.appendChild(el("text", { x: padL - 7, y: gy + 4, "font-size": 10.5, "text-anchor": "end",
+      fill: "var(--ink-3)", "font-family": "var(--font-data)" }, v.toFixed(1)));
+  }
+  for (let g = 0; g <= 4; g++) {
+    const v = (maxX / 4) * g;
+    svg.appendChild(el("text", { x: X(v), y: H - 22, "font-size": 10.5, "text-anchor": "middle",
+      fill: "var(--ink-3)", "font-family": "var(--font-data)" }, brl(v)));
+  }
+  svg.appendChild(el("text", { x: padL + plotW / 2, y: H - 5, "font-size": 10.5,
+    "text-anchor": "middle", fill: "var(--ink-3)",
+    "font-family": "var(--font-display)" }, "Revenue →"));
+
+  rows.forEach(r => {
+    const c = el("circle", { cx: X(r.x), cy: Y(Math.max(yMin, Math.min(yMax, r.y))), r: 5,
+      fill: hue[r.g] || "var(--s1)", stroke: "var(--surface)", "stroke-width": 2 });
+    c.style.cursor = "default";
+    svg.appendChild(c);
+    c.addEventListener("pointerenter", e => {
+      const b = host.getBoundingClientRect(), scale = W / b.width;
+      showTip(host, X(r.x) / scale, Y(r.y) / scale,
+        `<b>${r.k}</b>${brl(r.x)} · ${r.y.toFixed(2)}★ · class ${r.g}`);
+    });
+    c.addEventListener("pointerleave", () => hideTip(host));
+  });
+
+  /* Label only the outlier that makes the point — the weakest reviews.
+     The biggest earner is already named in the bar chart beside this. */
+  const worst = rows.reduce((a, b) => (b.y < a.y ? b : a));
+  svg.appendChild(el("text", { x: X(worst.x) + 9, y: Y(worst.y) + 4, "font-size": 10.5,
+    "text-anchor": "start", fill: "var(--ink-2)",
+    "font-family": "var(--font-display)" }, worst.k));
+
+  host.appendChild(svg);
+}
+
+/* ============================ panel scaffolding ============================ */
+const renderers = [];       /* redrawn on resize */
+function chartPanel(parent, { title, sub, controls, draw, table, aria }) {
+  const p = document.createElement("div");
+  p.className = "panel";
+
+  const head = document.createElement("div");
+  head.className = "panel-head";
+  const h = document.createElement("div");
+  h.innerHTML = `<h2 class="panel-title">${title}</h2>` + (sub ? `<p class="panel-sub">${sub}</p>` : "");
+  head.appendChild(h);
+
+  const right = document.createElement("div");
+  right.className = "ctl-row";
+  if (controls) right.appendChild(controls);
+
+  let showingTable = false;
+  if (table) {
+    const t = document.createElement("div");
+    t.className = "seg";
+    t.innerHTML = `<button type="button" aria-pressed="false">Table</button>`;
+    const btn = t.querySelector("button");
+    btn.addEventListener("click", () => {
+      showingTable = !showingTable;
+      btn.setAttribute("aria-pressed", String(showingTable));
+      paint();
+    });
+    right.appendChild(t);
+  }
+  if (right.children.length) head.appendChild(right);
+  p.appendChild(head);
+
+  const chart = document.createElement("div");
+  chart.className = "chart";
+  if (aria) chart.setAttribute("aria-label", aria);
+  p.appendChild(chart);
+  parent.appendChild(p);
+
+  function paint() {
+    if (showingTable) { chart.innerHTML = ""; chart.appendChild(table()); }
+    else draw(chart);
+  }
+  paint();
+  renderers.push(paint);
+  return { paint, chart };
+}
+
+function segControl(items, active, onPick) {
+  const wrap = document.createElement("div");
+  wrap.className = "seg";
+  items.forEach(it => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = it.label;
+    b.setAttribute("aria-pressed", String(it.id === active));
+    b.addEventListener("click", () => onPick(it.id));
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+function dataTable(cols, rows) {
+  const w = document.createElement("div");
+  w.className = "tbl-wrap";
+  const t = document.createElement("table");
+  t.className = "dv";
+  t.innerHTML = "<thead><tr>" + cols.map(c => `<th scope="col">${c}</th>`).join("") +
+    "</tr></thead><tbody>" +
+    rows.map(r => "<tr>" + r.map((c, i) =>
+      i === 0 ? `<th scope="row" style="text-align:left;font-weight:500">${c}</th>` : `<td>${c}</td>`
+    ).join("") + "</tr>").join("") + "</tbody>";
+  w.appendChild(t);
+  return w;
+}
+
+/* ============================ state ============================ */
+const state = { view: "sales", metric: "rev", dim: "month", topN: 12, segMode: "n" };
+
+/* ============================ KPI rail ============================ */
+function renderKpis() {
+  const { growth } = yoyLikeForLike();
+  const cells = [
+    ["Revenue", brl(KPI.revenue), `▲ ${pct(growth, 0)} Jan–Aug YoY`, "up"],
+    ["Orders", nf(KPI.orders), `${nf(KPI.items)} items`, ""],
+    ["Avg order value", "R$" + nf(KPI.aov, 2), `${nf(KPI.itemsPerOrder, 2)} items/order`, ""],
+    ["Customers", nf(KPI.customers), "3.0% ordered twice", "down"],
+    ["Avg review", nf(KPI.avgReview, 2) + "★", `${pct(KPI.fiveStar)} five-star`, ""],
+    ["Late delivery", pct(KPI.latePct), `${nf(KPI.lateOrders)} orders`, "down"]
+  ];
+  document.getElementById("kpis").innerHTML = cells.map(([l, v, n, c]) =>
+    `<div class="kpi"><div class="lab">${l}</div><div class="val">${v}</div>
+     <div class="note ${c}">${n}</div></div>`).join("");
+}
+
+/* ============================ views ============================ */
+const VIEWS = [
+  { id: "sales", label: "Sales" },
+  { id: "products", label: "Products" },
+  { id: "delivery", label: "Delivery" },
+  { id: "customers", label: "Customers" },
+  { id: "risk", label: "Delivery risk" }
+];
+
+const METRICS = {
+  rev: { label: "Revenue", fmt: brl, pick: d => d.rev, tipLabel: "" },
+  ord: { label: "Orders", fmt: n => nf(n), pick: d => d.ord, tipLabel: "" },
+  aov: { label: "Avg order value", fmt: n => "R$" + nf(n, 0), pick: d => d.aov, tipLabel: "" }
+};
+
+const DIMS = {
+  month: { label: "Month" }, category: { label: "Category" },
+  region: { label: "Region" }, abc: { label: "ABC class" }, segment: { label: "Segment" }
+};
+
+function viewSales(root) {
+  const top = document.createElement("div");
+  top.className = "grid-2";
+  root.appendChild(top);
+
+  const m = METRICS[state.metric];
+  chartPanel(top, {
+    title: `${m.label} by month`,
+    sub: "Jan 2017 – Aug 2018. The two part-months at each end of the dataset are excluded.",
+    controls: segControl(
+      Object.entries(METRICS).map(([id, v]) => ({ id, label: v.label })),
+      state.metric, id => { state.metric = id; render(); }),
+    table: () => dataTable(["Month", "Revenue", "Orders", "AOV"],
+      MONTHLY.map(d => [monthLabel(d.m), brlFull(d.rev), nf(d.ord), "R$" + nf(d.aov, 2)])),
+    draw: host => lineChart(host,
+      MONTHLY.map(d => ({ k: monthLabel(d.m), full: monthLabel(d.m), v: m.pick(d) })),
+      { fmt: m.fmt, height: 248, aria: `${m.label} by month` })
+  });
+
+  chartPanel(top, {
+    title: "Revenue by region",
+    sub: "Southeast carries two-thirds of the marketplace.",
+    table: () => dataTable(["Region", "Revenue", "Share"],
+      REGIONS.map(r => [r.name, brl(r.rev), pct(r.rev / KPI.revenue)])),
+    draw: host => hBars(host, REGIONS.map(r => ({
+      k: r.name, v: r.rev, tip: `${brl(r.rev)} · ${pct(r.rev / KPI.revenue)} of revenue`
+    })), { rowH: 30, maxLabel: 14 })
+  });
+
+  const bottom = document.createElement("div");
+  bottom.className = "grid-2b";
+  root.appendChild(bottom);
+
+  chartPanel(bottom, {
+    title: "Revenue concentration by ABC class",
+    sub: "17 of 74 categories produce 80% of revenue; the 41-category tail returns 5%.",
+    table: () => dataTable(["Class", "Categories", "Revenue", "Share"],
+      ABC.map(a => [a.cls, a.n, brl(a.rev), pct(a.rev / KPI.revenue)])),
+    draw: host => vBars(host, ABC.map(a => ({
+      k: "Class " + a.cls, v: a.rev, sub: `${a.n} categories`
+    })), { height: 196, colorOf: r => r.k.includes("A") ? "var(--s1)" : "var(--s2)" })
+  });
+
+  const stats = document.createElement("div");
+  stats.className = "panel";
+  stats.innerHTML = `
+    <div class="panel-head"><div>
+      <h2 class="panel-title">Order profile</h2>
+      <p class="panel-sub">What a typical transaction looks like.</p>
+    </div></div>
+    <div class="testbox">
+      <dl>
+        <dt>Gross order value</dt><dd>${brlFull(KPI.gross)}</dd>
+        <dt>Freight charged</dt><dd>${brlFull(KPI.freight)}</dd>
+        <dt>Items per order</dt><dd>${nf(KPI.itemsPerOrder, 2)}</dd>
+        <dt>Active sellers</dt><dd>${nf(KPI.sellers)}</dd>
+        <dt>Avg delivery time</dt><dd>${nf(KPI.avgDeliveryDays, 1)} days</dd>
+        <dt>Vs promised date</dt><dd>${nf(KPI.avgVsEstimate, 1)} days</dd>
+      </dl>
+      <p class="cap">Orders arrive on average 11.9 days <em>ahead</em> of the promised date,
+      so delivery estimates are already conservative — yet 6.8% still miss. That makes the
+      promise, not the logistics, the cheaper thing to fix.</p>
+    </div>`;
+  bottom.appendChild(stats);
+}
+
+function viewProducts(root) {
+  const top = document.createElement("div");
+  top.className = "grid-2";
+  root.appendChild(top);
+
+  const shown = CATEGORIES.slice(0, state.topN);
+  chartPanel(top, {
+    title: `Top ${state.topN} categories by revenue`,
+    sub: "Coloured by ABC class. No single category exceeds 9.3% — the book is concentrated, not dependent.",
+    controls: segControl(
+      [{ id: 8, label: "Top 8" }, { id: 12, label: "Top 12" }, { id: 20, label: "Top 20" }, { id: 38, label: "All" }],
+      state.topN, id => { state.topN = id; render(); }),
+    table: () => dataTable(["Category", "Revenue", "Share", "Class", "Avg review"],
+      CATEGORIES.map(c => [c.name, brlFull(c.rev), pct(c.rev / KPI.revenue), c.abc, c.review.toFixed(2)])),
+    draw: host => hBars(host, shown.map(c => ({
+      k: c.name, v: c.rev,
+      tip: `${brl(c.rev)} · ${pct(c.rev / KPI.revenue)} · class ${c.abc} · ${c.review.toFixed(2)}★`
+    })), {
+      rowH: state.topN > 20 ? 17 : 23, maxLabel: 26,
+      colorOf: r => {
+        const c = CATEGORIES.find(x => x.name === r.k);
+        return c && c.abc === "A" ? "var(--s1)" : c && c.abc === "B" ? "var(--s2)" : "var(--s3)";
+      }
+    })
+  });
+
+  const side = document.createElement("div");
+  side.style.display = "grid";
+  side.style.gap = "16px";
+  side.style.alignContent = "start";
+  top.appendChild(side);
+
+  const legend = document.createElement("div");
+  legend.className = "legend";
+  legend.innerHTML = `
+    <span><i style="background:var(--s1)"></i>Class A — first 80% of revenue</span>
+    <span><i style="background:var(--s2)"></i>Class B — next 15%</span>
+    <span><i style="background:var(--s3)"></i>Class C — final 5%</span>`;
+  side.appendChild(legend);
+
+  const callout = document.createElement("div");
+  callout.className = "callout";
+  callout.innerHTML = `<b>Bed Bath Table</b>
+    <p>Third-largest earner at ${brl(1035964.06)}, but the weakest reviews of any class A
+    category at 3.88★. Bulky homewares are harder to ship, which ties this page to the
+    delivery one.</p>`;
+  side.appendChild(callout);
+
+  chartPanel(side, {
+    title: "Revenue against satisfaction",
+    sub: "Each dot is one category. Revenue and review score move independently.",
+    table: () => dataTable(["Category", "Revenue", "Avg review", "Class"],
+      CATEGORIES.map(c => [c.name, brl(c.rev), c.review.toFixed(2), c.abc])),
+    draw: host => scatter(host,
+      CATEGORIES.map(c => ({ k: c.name, x: c.rev, y: c.review, g: c.abc })),
+      { height: 268 })
+  });
+}
+
+function viewDelivery(root) {
+  const head = document.createElement("div");
+  head.className = "panel";
+  head.innerHTML = `
+    <div class="panel-head"><div>
+      <h2 class="panel-title">Late orders lose two full stars</h2>
+      <p class="panel-sub">Review scores for the ${nf(KPI.delivered)} delivered orders, split by
+      whether they arrived before the promised date.</p>
+    </div></div>
+    <div class="stat-pair">
+      <div class="stat ontime">
+        <div class="k">On time · n = ${nf(89936)}</div>
+        <div class="v">${nf(KPI.reviewOnTime, 2)}<span style="font-size:.45em">★</span></div>
+        <div class="d">6.8% leave one star</div>
+      </div>
+      <div class="stat late">
+        <div class="k">Late · n = ${nf(KPI.lateOrders)}</div>
+        <div class="v">${nf(KPI.reviewLate, 2)}<span style="font-size:.45em">★</span></div>
+        <div class="d">54.2% leave one star</div>
+      </div>
+    </div>`;
+  root.appendChild(head);
+
+  const grid = document.createElement("div");
+  grid.className = "grid-2";
+  root.appendChild(grid);
+
+  chartPanel(grid, {
+    title: "Share of orders leaving one star",
+    sub: "An eightfold difference — the clearest operational signal in the dataset.",
+    table: () => dataTable(["Delivery", "Orders", "One-star rate"],
+      [["On time", nf(89936), "6.8%"], ["Late", nf(KPI.lateOrders), "54.2%"]]),
+    draw: host => vBars(host, [
+      { k: "On time", v: 6.8, sub: `${nf(89936)} orders` },
+      { k: "Late", v: 54.2, sub: `${nf(KPI.lateOrders)} orders` }
+    ], {
+      height: 212, fmt: v => nf(v, 1) + "%",
+      colorOf: r => r.k === "Late" ? "var(--s2)" : "var(--s1)"
+    })
+  });
+
+  const test = document.createElement("div");
+  test.className = "panel";
+  test.innerHTML = `
+    <div class="panel-head"><div>
+      <h2 class="panel-title">Is the gap real?</h2>
+      <p class="panel-sub">Tested rather than asserted.</p>
+    </div></div>
+    <div class="testbox">
+      <dl>
+        <dt>Difference in means</dt><dd>${nf(KPI.reviewGap, 2)} stars</dd>
+        <dt>95% confidence interval</dt><dd>1.99 – 2.06</dd>
+        <dt>Mann–Whitney U</dt><dd>p &lt; 0.001</dd>
+        <dt>Cliff's delta</dt><dd>0.64 (large)</dd>
+        <dt>Sample</dt><dd>${nf(KPI.delivered)} delivered orders</dd>
+      </dl>
+      <p class="cap">Review scores are ordinal and heavily skewed toward five, so a rank test
+      is the honest choice; Welch's t-test agreed. With 96,470 rows a small p-value is almost
+      guaranteed, which is why the effect size carries the argument instead.</p>
+      <p class="cap"><strong>Caveat.</strong> Observational data shows association, not cause.
+      Orders that run late may also differ in distance, bulk and seller reliability.</p>
+    </div>`;
+  grid.appendChild(test);
+}
+
+function viewCustomers(root) {
+  const lead = document.createElement("div");
+  lead.className = "callout";
+  lead.innerHTML = `<b>2,887 of 94,983 customers ordered twice</b>
+    <p>A 3.0% repeat rate means almost every sale depends on paid acquisition. This is the
+    structural finding underneath everything else on the dashboard — and the RFM segments
+    below exist to say which customers are worth winning back first.</p>`;
+  root.appendChild(lead);
+
+  const grid = document.createElement("div");
+  grid.className = "grid-2";
+  root.appendChild(grid);
+
+  const byValue = state.segMode === "value";
+  const sorted = [...SEGMENTS].sort((a, b) => (byValue ? b.value - a.value : b.n - a.n));
+
+  chartPanel(grid, {
+    title: byValue ? "Lifetime value by segment" : "Customers by segment",
+    sub: "Recency, frequency and monetary value, scored into quintiles and labelled.",
+    controls: segControl(
+      [{ id: "n", label: "Customers" }, { id: "value", label: "Revenue" }],
+      state.segMode, id => { state.segMode = id; render(); }),
+    table: () => dataTable(["Segment", "Customers", "Share", "Total value", "Avg value"],
+      SEGMENTS.map(s => [s.name, nf(s.n), pct(s.n / KPI.customers), brl(s.value), "R$" + nf(s.avg)])),
+    draw: host => hBars(host, sorted.map(s => ({
+      k: s.name, v: byValue ? s.value : s.n,
+      tip: `${nf(s.n)} customers · ${brl(s.value)} total · R$${nf(s.avg)} average`
+    })), {
+      rowH: 30, maxLabel: 22,
+      fmt: byValue ? brl : (v => nf(v)),
+      colorOf: r => r.k.startsWith("At Risk") ? "var(--s2)" : "var(--s1)"
+    })
+  });
+
+  const target = document.createElement("div");
+  target.className = "panel";
+  target.innerHTML = `
+    <div class="panel-head"><div>
+      <h2 class="panel-title">The segment worth acting on</h2>
+      <p class="panel-sub">Highest average spend, no recent order.</p>
+    </div></div>
+    <div class="testbox">
+      <dl>
+        <dt>Segment</dt><dd>At Risk (high value)</dd>
+        <dt>Customers</dt><dd>${nf(14748)}</dd>
+        <dt>Average spend</dt><dd>R$280</dd>
+        <dt>Revenue at stake</dt><dd>${brl(4129148)}</dd>
+        <dt>K-means silhouette</dt><dd>0.386</dd>
+      </dl>
+      <p class="cap">Highest average value of any group, and they have stopped buying. Winning
+      back a fraction costs less than acquiring equivalent customers.</p>
+      <p class="cap"><strong>Limitation worth stating.</strong> With 97% of customers buying
+      once, the frequency dimension of RFM carries almost no information — these segments are
+      driven by recency and spend. A k-means cross-check scored 0.386, meaning the clusters
+      overlap, so the rules-based labels are used for reporting instead.</p>
+    </div>`;
+  grid.appendChild(target);
+}
+
+function viewRisk(root) {
+  const lead = document.createElement("div");
+  lead.className = "panel";
+  lead.innerHTML = `
+    <div class="panel-head"><div>
+      <h2 class="panel-title">Predicting late delivery at the moment an order is placed</h2>
+      <p class="panel-sub">Trained on ${nf(MODEL.train)} orders placed before ${MODEL.splitDate},
+      tested on the ${nf(MODEL.test)} that came after — a time-based split, so the model never
+      sees the future. Only order-time features: no delivery date, no review.</p>
+    </div></div>`;
+  root.appendChild(lead);
+
+  const grid = document.createElement("div");
+  grid.className = "grid-2";
+  root.appendChild(grid);
+
+  chartPanel(grid, {
+    title: "What drives a late delivery",
+    sub: "Top ten features by absolute coefficient, logistic regression.",
+    table: () => dataTable(["Feature", "Coefficient"],
+      MODEL.drivers.map(([k, v]) => [k, v.toFixed(4)])),
+    draw: host => hBars(host, MODEL.drivers.map(([k, v]) => ({
+      k, v, tip: `coefficient ${v.toFixed(4)}`
+    })), { rowH: 22, maxLabel: 24, fmt: v => v.toFixed(2), color: "var(--s1)" })
+  });
+
+  const right = document.createElement("div");
+  right.style.display = "grid";
+  right.style.gap = "16px";
+  right.style.alignContent = "start";
+  grid.appendChild(right);
+
+  chartPanel(right, {
+    title: "Model against baseline",
+    sub: "PR-AUC, the honest metric when only 6.8% of orders are late.",
+    table: () => dataTable(["Model", "ROC-AUC", "PR-AUC"],
+      MODEL.models.map(m => [m.name, m.roc.toFixed(3), m.pr.toFixed(3)])
+        .concat([["Always-late baseline", "—", MODEL.baseline.toFixed(3)]])),
+    draw: host => vBars(host, [
+      { k: "Baseline", v: MODEL.baseline, sub: "no model" },
+      { k: "Random forest", v: 0.055, sub: "PR-AUC" },
+      { k: "Logistic", v: 0.059, sub: "selected" }
+    ], {
+      height: 190, fmt: v => v.toFixed(3),
+      colorOf: r => r.k === "Logistic" ? "var(--s1)" : "var(--s3)"
+    })
+  });
+
+  const cm = document.createElement("div");
+  cm.className = "panel";
+  cm.innerHTML = `
+    <div class="panel-head"><div>
+      <h2 class="panel-title">Confusion matrix, test period</h2>
+      <p class="panel-sub">At a 0.5 threshold. Recall ${nf(MODEL.recall * 100, 1)}%,
+      precision ${nf(MODEL.precision * 100, 1)}%.</p>
+    </div></div>
+    <table class="cm">
+      <thead><tr><th></th><th scope="col">Predicted on time</th><th scope="col">Predicted late</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Actually on time</th><td class="hit">${nf(MODEL.cm.tn)}</td><td class="miss">${nf(MODEL.cm.fp)}</td></tr>
+        <tr><th scope="row">Actually late</th><td class="miss">${nf(MODEL.cm.fn)}</td><td class="hit">${nf(MODEL.cm.tp)}</td></tr>
+      </tbody>
+    </table>
+    <div class="testbox">
+      <p class="cap">The model catches 71% of late orders but flags a lot of on-time ones to
+      do it. Whether that trade is worth making depends on the cost of a missed late delivery
+      against the cost of a false alarm — which is a business decision, not a modelling one.
+      The 0.5 threshold is arbitrary and would be set from those costs in production.</p>
+    </div>`;
+  right.appendChild(cm);
+}
+
+const VIEW_FN = { sales: viewSales, products: viewProducts, delivery: viewDelivery,
+  customers: viewCustomers, risk: viewRisk };
+
+/* ============================ commentary ============================ */
+function commentary() {
+  const top = CATEGORIES[0];
+  const share = top.rev / KPI.revenue;
+  const { a: y17, b: y18, growth } = yoyLikeForLike();
+  const m = METRICS[state.metric];
+  const peak = MONTHLY.reduce((a, b) => (m.pick(b) > m.pick(a) ? b : a));
+
+  const lines = {
+    sales: `Across <b>${nf(KPI.orders)}</b> orders worth <b>${brl(KPI.revenue)}</b>,
+      ${m.label.toLowerCase()} peaked in <b>${monthLabel(peak.m)}</b> at
+      <b>${m.fmt(m.pick(peak))}</b>. Comparing like for like, the first eight months of 2018
+      brought <b>${brl(y18)}</b> against <b>${brl(y17)}</b> in the same months of 2017 —
+      <b>${pct(growth, 0)}</b> growth.`,
+    products: `<b>${top.name}</b> leads at <b>${pct(share)}</b> of revenue, and the top
+      <b>17</b> of <b>74</b> categories carry <b>80%</b> of the book. The 41-category tail
+      returns <b>5%</b> while still costing listing, photography and support.`,
+    delivery: `Late orders average <b>${nf(KPI.reviewLate, 2)}★</b> against
+      <b>${nf(KPI.reviewOnTime, 2)}★</b> for on-time ones — a gap of <b>${nf(KPI.reviewGap, 2)}</b>
+      stars with Cliff's delta <b>0.64</b>. Only <b>${pct(KPI.latePct)}</b> of orders are late,
+      so the problem is contained and the payoff is large.`,
+    customers: `Of <b>${nf(KPI.customers)}</b> customers, only <b>3.0%</b> ever ordered twice.
+      The <b>At Risk (high value)</b> segment holds <b>${nf(14748)}</b> customers and
+      <b>${brl(4129148)}</b> of past revenue at the highest average spend of any group.`,
+    risk: `Logistic regression reached <b>0.059</b> PR-AUC against a <b>0.035</b> baseline on
+      held-out future orders — a <b>69%</b> lift, catching <b>71%</b> of late deliveries.
+      Modest in absolute terms, and honest about it: rare-event prediction from order-time
+      features alone is hard.`
+  };
+  document.getElementById("commentary").innerHTML = lines[state.view];
+}
+
+/* ============================ render ============================ */
+function renderTabs() {
+  const nav = document.getElementById("tabs");
+  nav.innerHTML = "";
+  VIEWS.forEach(v => {
+    const b = document.createElement("button");
+    b.className = "tab"; b.type = "button"; b.role = "tab";
+    b.textContent = v.label;
+    b.setAttribute("aria-selected", String(v.id === state.view));
+    b.addEventListener("click", () => { state.view = v.id; render(); });
+    nav.appendChild(b);
+  });
+}
+
+function render() {
+  renderers.length = 0;
+  renderTabs();
+  const root = document.getElementById("canvas");
+  root.innerHTML = "";
+  VIEW_FN[state.view](root);
+  commentary();
+}
+
+renderKpis();
+render();
+
+let t = null;
+new ResizeObserver(() => {
+  clearTimeout(t);
+  t = setTimeout(() => renderers.forEach(fn => fn()), 90);
+}).observe(document.getElementById("canvas"));
+
+})();
+</script>
+</body>
+</html>
