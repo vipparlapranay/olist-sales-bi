@@ -1,4 +1,4 @@
-# Key insights (Day 7)
+# Key insights
 
 Write these only **after** you've built the dashboard and looked at the real numbers.
 Never write an insight you can't point to on a chart. Each insight follows the same

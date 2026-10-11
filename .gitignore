@@ -25,3 +25,9 @@ Thumbs.db
 # Figures and markdown reports ARE committed — they're what reviewers look at.
 outputs/model/*.csv
 logs/*.log
+
+# Personal job-hunt notes and the original scaffolding: kept locally, not published.
+# interview_prep.md in particular should not be readable by the people interviewing you.
+career/
+00_START_HERE.md
+RUN_ME.md

@@ -1,5 +1,7 @@
 // ============================================================================
-// Dim_Date  (Day 3)
+// dim_date — standalone DAX calendar.
+// NOTE: the pipeline already writes dim_date.csv. Use this only if you are building
+// the model from the Power Query scripts instead of the pipeline output.
 // Modeling > New table > paste everything below the comment lines.
 // Then: Table tools > Mark as date table > choose [Date].
 // Sort "Month" by "Month No" and "Year Month" by "Year Month Sort".

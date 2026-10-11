@@ -15,17 +15,20 @@ that way — but for building the report, follow this file instead.
 
 | File | Loads as | Notes |
 |---|---|---|
-| `fact_sales.csv` | Fact_Sales | one row per order item |
-| `fact_orders.csv` | Fact_Orders | one row per order |
-| `dim_date.csv` | Dim_Date | continuous calendar |
-| `dim_customer.csv` | Dim_Customer | |
-| `dim_product.csv` | Dim_Product | |
-| `dim_seller.csv` | Dim_Seller | |
-| `dim_category_abc.csv` | Dim_Category_ABC | A/B/C class per category |
-| `dim_customer_segment.csv` | Dim_Customer_Segment | RFM scores and segment labels |
-| `fact_order_risk.csv` | Fact_Order_Risk | predicted late risk per order |
+| `fact_sales.csv` | fact_sales | one row per order item |
+| `fact_orders.csv` | fact_orders | one row per order |
+| `dim_date.csv` | dim_date | continuous calendar |
+| `dim_customer.csv` | dim_customer | |
+| `dim_product.csv` | dim_product | |
+| `dim_seller.csv` | dim_seller | |
+| `dim_category_abc.csv` | dim_category_abc | A/B/C class per category |
+| `dim_customer_segment.csv` | dim_customer_segment | RFM scores and segment labels |
+| `fact_order_risk.csv` | fact_order_risk | predicted late risk per order |
 
-Rename each query to the table name in the second column (right-click → Rename).
+**Don't rename the queries.** Power BI names each one after its file, which is already
+the name every measure in `dax/01_measures.dax` expects. Renaming to `Fact_Sales` while
+the columns stay lowercase gives you a model that is half one convention and half the
+other, and every measure then has to be edited to match.
 
 Faster alternative: **Get data → Folder**, point at `outputs/model`, and Power BI will
 list every CSV at once.
@@ -33,7 +36,7 @@ list every CSV at once.
 ## 2. Check the data types
 
 Power BI usually guesses well here because the pipeline writes clean files, but confirm:
-- `date` in Dim_Date is **Date**
+- `date` in dim_date is **Date**
 - `order_date` in both fact tables is **Date**
 - `price`, `freight_value`, `line_total`, `monetary` are **Decimal Number**
 - Zip prefix columns are **Text** (leading zeros matter)
@@ -42,18 +45,18 @@ Power BI usually guesses well here because the pipeline writes clean files, but 
 
 | From (one) | To (many) | Cross-filter |
 |---|---|---|
-| Dim_Date[date] | Fact_Sales[order_date] | Single |
-| Dim_Date[date] | Fact_Orders[order_date] | Single |
-| Dim_Customer[customer_id] | Fact_Sales[customer_id] | Single |
-| Dim_Customer[customer_id] | Fact_Orders[customer_id] | Single |
-| Dim_Product[product_id] | Fact_Sales[product_id] | Single |
-| Dim_Seller[seller_id] | Fact_Sales[seller_id] | Single |
-| Dim_Category_ABC[category] | Dim_Product[category] | Single |
-| Fact_Orders[order_id] | Fact_Order_Risk[order_id] | Single (1:1) |
-| Dim_Customer_Segment[customer_unique_id] | Dim_Customer[customer_unique_id] | Single |
+| dim_date[date] | fact_sales[order_date] | Single |
+| dim_date[date] | fact_orders[order_date] | Single |
+| dim_customer[customer_id] | fact_sales[customer_id] | Single |
+| dim_customer[customer_id] | fact_orders[customer_id] | Single |
+| dim_product[product_id] | fact_sales[product_id] | Single |
+| dim_seller[seller_id] | fact_sales[seller_id] | Single |
+| dim_category_abc[category] | dim_product[category] | Single |
+| fact_orders[order_id] | fact_order_risk[order_id] | Single (1:1) |
+| dim_customer_segment[customer_unique_id] | dim_customer[customer_unique_id] | Single |
 
 Then:
-- **Mark Dim_Date as a date table** (Table tools → Mark as date table → `date`).
+- **Mark dim_date as a date table** (Table tools → Mark as date table → `date`).
 - Sort `month` by `month_no`, and `year_month` by `year_month_sort`.
 - Hide foreign keys on the fact tables.
 - Set `customer_state_name` and `seller_state_name` data category to **State or Province**.
@@ -66,20 +69,20 @@ and predicted risk all become slicers in the report without any extra DAX.
 Paste from `dax/01_measures.dax` as before. Two small differences now that the pipeline
 built the tables:
 
-- Column names are lower case with underscores, e.g. `Fact_Sales[price]`,
-  `Fact_Sales[is_valid_sale]`, `Fact_Orders[is_late]`, `Fact_Orders[review_score]`.
-- `Dim_Date` already exists as a table, so skip `dax/00_date_table.dax`.
+- Column names are lower case with underscores, e.g. `fact_sales[price]`,
+  `fact_sales[is_valid_sale]`, `fact_orders[is_late]`, `fact_orders[review_score]`.
+- `dim_date` already exists as a table, so skip `dax/00_date_table.dax`.
 
 Three extra measures worth adding, since you now have data the DAX file didn't know about:
 
 ```
-Avg Late Risk = AVERAGE ( Fact_Order_Risk[late_risk] )
+Avg Late Risk = AVERAGE ( fact_order_risk[late_risk] )
 
 High Risk Orders =
-CALCULATE ( COUNTROWS ( Fact_Order_Risk ), Fact_Order_Risk[risk_band] IN { "High", "Very High" } )
+CALCULATE ( COUNTROWS ( fact_order_risk ), fact_order_risk[risk_band] IN { "High", "Very High" } )
 
 Class A Revenue =
-CALCULATE ( [Revenue], Dim_Category_ABC[abc_class] = "A" )
+CALCULATE ( [Revenue], dim_category_abc[abc_class] = "A" )
 ```
 
 ## 5. Extra report pages you can now build

@@ -1,4 +1,4 @@
-# Power Query scripts (Day 2)
+# Power Query scripts
 
 ## How to use these
 
