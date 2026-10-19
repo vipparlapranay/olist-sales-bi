@@ -1,4 +1,4 @@
-# Data profile (Day 1)
+# Data profile
 
 Fill in the **Your row count** column yourself by running `scripts/profile_data.py`
 or by opening each file. The reference notes below tell you what to look for.

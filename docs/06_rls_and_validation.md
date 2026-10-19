@@ -1,19 +1,19 @@
-# Row-level security and validation (Day 6)
+# Row-level security and validation
 
 ## Part A: Row-level security
 
 **Goal:** a regional manager opening the report sees only their region's customers.
 
 1. **Modeling → Manage roles → New role.** Name it `Southeast Manager`.
-2. Select table **Dim_Customer** and enter the DAX filter:
+2. Select table **dim_customer** and enter the DAX filter:
    ```
-   [Customer Region] = "Southeast"
+   [customer_region] = "Southeast"
    ```
 3. Repeat for the other regions: North, Northeast, Center-West, South.
 4. **Modeling → View as → Southeast Manager.** Every page should now show Southeast only.
-   Screenshot this for your README.
 
-**Why it works:** the filter on Dim_Customer flows down the one-to-many relationships to
+
+**Why it works:** the filter on dim_customer flows down the one-to-many relationships to
 *both* fact tables, so revenue, delivery and review measures are all restricted.
 
 **What to say in interviews:** "This is static RLS: one role per region. In production
@@ -22,8 +22,8 @@ with `USERPRINCIPALNAME()`, so adding a manager is a data change, not a model ch
 
 **Optional stretch (dynamic RLS):**
 1. Enter data → table `Security_Users` with columns `Email`, `Region`.
-2. Relate `Security_Users[Region]` to `Dim_Customer[Customer Region]`
-   (many-to-many, single direction from Security_Users to Dim_Customer).
+2. Relate `Security_Users[Region]` to `dim_customer[customer_region]`
+   (many-to-many, single direction from Security_Users to dim_customer).
 3. Role `Dynamic Region` on Security_Users: `[Email] = USERPRINCIPALNAME()`.
 4. Test with View as → Other user → enter an email from your table.
 
@@ -51,7 +51,7 @@ independent calculation.
 | Customers too high | Counting customer_id instead of customer_unique_id |
 | Late % different | Comparing datetimes instead of dates, or including undelivered orders |
 | Avg review different | Duplicate reviews not reduced to one per order |
-| YoY blank | Dim_Date not marked as date table, or relationship missing |
+| YoY blank | dim_date not marked as date table, or relationship missing |
 
 ## Part D: Test cases
 

@@ -1,4 +1,4 @@
-# Report layout (Day 5)
+# Report layout
 
 Canvas: 16:9 (1280 × 720). Import the theme first: **View → Themes → Browse for themes →
 `theme/olist_theme.json`**. Colour meaning is fixed across the report: blue = revenue,
@@ -63,7 +63,7 @@ Layout rules:
 
 ## Page 4 — Category detail (drill-through, hidden)
 
-Add `Dim_Product[Category]` to the drill-through well. Show: KPI cards for the selected
+Add `dim_product[category]` to the drill-through well. Show: KPI cards for the selected
 category, revenue trend, top 10 sellers by revenue, review score distribution (count of
 orders by ReviewScore). Add a back button. Hide the page tab.
 

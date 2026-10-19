@@ -59,7 +59,7 @@ Top 15 features by absolute coefficient:
 
 ## How this is used
 
-`outputs/model/fact_order_risk.csv` holds a predicted probability and a risk band for every delivered order. Power BI joins it to Fact_Orders on order_id, giving the report an at-risk view alongside the historical pages.
+`outputs/model/fact_order_risk.csv` holds a predicted probability and a risk band for every delivered order. Power BI joins it to fact_orders on order_id, giving the report an at-risk view alongside the historical pages.
 
 ## Limitations (say these before an interviewer asks)
 

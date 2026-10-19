@@ -306,11 +306,16 @@ const ABC = [
   {cls:"C", n:41, rev:695083.66,  note:"review"}
 ];
 
-/* Read from the Power BI regional chart — swap for exact gold-layer values. */
+/* Exact, from fact_sales joined to dim_customer on valid sales only.
+   Sums to 13,494,400.74 — the same revenue as the KPI above, which is the
+   check that matters: if these five stop adding to the headline, the join
+   has started dropping rows. */
 const REGIONS = [
-  {name:"Southeast", rev:8_930_000}, {name:"South", rev:1_780_000},
-  {name:"Northeast", rev:1_320_000}, {name:"Center-West", rev:1_020_000},
-  {name:"North", rev:444_000}
+  {name:"Southeast",   rev:8822530.97},
+  {name:"South",       rev:1938021.12},
+  {name:"Northeast",   rev:1538209.28},
+  {name:"Center-West", rev: 861825.09},
+  {name:"North",       rev: 333814.28}
 ];
 
 const SEGMENTS = [
@@ -455,7 +460,9 @@ function vBars(host, rows, opts = {}) {
   host.innerHTML = "";
   const W = host.clientWidth || 360, H = opts.height || 190;
   const padB = 34, padT = 26;
-  const max = niceMax(Math.max(...rows.map(r => r.v), 1));
+  // opts.max lets a caller set the axis ceiling. Without it the floor of 1 keeps
+  // share charts on a true 0-100% scale; metrics far below 1 (PR-AUC) need their own.
+  const max = opts.max ?? niceMax(Math.max(...rows.map(r => r.v), 1));
   const n = rows.length;
   const slot = W / n, bw = Math.min(slot - 14, 66);
 
@@ -1020,7 +1027,7 @@ function viewRisk(root) {
       { k: "Random forest", v: 0.055, sub: "PR-AUC" },
       { k: "Logistic", v: 0.059, sub: "selected" }
     ], {
-      height: 190, fmt: v => v.toFixed(3),
+      height: 190, max: 0.08, fmt: v => v.toFixed(3),
       colorOf: r => r.k === "Logistic" ? "var(--s1)" : "var(--s3)"
     })
   });

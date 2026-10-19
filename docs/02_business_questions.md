@@ -1,4 +1,4 @@
-# Business questions and stakeholder brief (Day 1)
+# Business questions and stakeholder brief
 
 ## The brief (pretend a stakeholder sent you this)
 
